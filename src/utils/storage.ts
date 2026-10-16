@@ -12,13 +12,13 @@ export function getStoredTheme(): 'light' | 'dark' {
     if (saved === 'dark' || saved === 'light') {
       return saved;
     }
-    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+    if (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
       return 'dark';
     }
   } catch (e) {
     console.error('Error reading theme from localStorage', e);
   }
-  return 'light';
+  return 'dark'; // Default to modern dark SaaS theme
 }
 
 export function saveStoredTheme(theme: 'light' | 'dark'): void {
@@ -94,21 +94,42 @@ export function calculateWeekStats(history: QuizResult[]): Record<number, WeekSt
       attemptsCount: 0,
       bestScore: undefined,
       bestPercentage: undefined,
+      latestScore: undefined,
+      latestPercentage: undefined,
       lastAttemptDate: undefined,
+      status: 'not_started',
     };
   }
 
+  // History is ordered newest to oldest
   for (const item of history) {
     if (item.mode === 'week' && item.week && item.week >= 1 && item.week <= 12) {
       const w = item.week;
       stats[w].attemptsCount++;
+
+      // Latest attempt is first encountered
+      if (stats[w].latestScore === undefined) {
+        stats[w].latestScore = item.score;
+        stats[w].latestPercentage = item.percentage;
+        stats[w].lastAttemptDate = item.date;
+      }
+
       if (stats[w].bestScore === undefined || item.score > (stats[w].bestScore ?? 0)) {
         stats[w].bestScore = item.score;
         stats[w].bestPercentage = item.percentage;
       }
-      if (!stats[w].lastAttemptDate) {
-        stats[w].lastAttemptDate = item.date;
-      }
+    }
+  }
+
+  // Derive status
+  for (let w = 1; w <= 12; w++) {
+    const s = stats[w];
+    if (s.attemptsCount === 0) {
+      s.status = 'not_started';
+    } else if (s.bestPercentage !== undefined && s.bestPercentage >= 80) {
+      s.status = 'completed';
+    } else {
+      s.status = 'in_progress';
     }
   }
 
@@ -116,6 +137,22 @@ export function calculateWeekStats(history: QuizResult[]): Record<number, WeekSt
 }
 
 export function calculateOverallStats(history: QuizResult[]): OverallStats {
+  const weekStats = calculateWeekStats(history);
+  let masteredWeeksCount = 0;
+  let totalMasteredQuestions = 0;
+
+  for (let w = 1; w <= 12; w++) {
+    if (weekStats[w].status === 'completed') {
+      masteredWeeksCount++;
+    }
+    if (weekStats[w].bestScore !== undefined) {
+      totalMasteredQuestions += weekStats[w].bestScore!;
+    }
+  }
+
+  // 180 questions across 12 weeks
+  const overallReadinessPercentage = Math.round((totalMasteredQuestions / 180) * 100);
+
   if (history.length === 0) {
     return {
       totalAttempts: 0,
@@ -123,6 +160,8 @@ export function calculateOverallStats(history: QuizResult[]): OverallStats {
       totalCorrect: 0,
       totalIncorrect: 0,
       averageScorePercentage: 0,
+      masteredWeeksCount: 0,
+      overallReadinessPercentage: 0,
     };
   }
 
@@ -155,6 +194,8 @@ export function calculateOverallStats(history: QuizResult[]): OverallStats {
     totalCorrect,
     totalIncorrect,
     averageScorePercentage: Math.round((percentageSum / history.length) * 10) / 10,
+    masteredWeeksCount,
+    overallReadinessPercentage,
     bestCombinedScore: bestCombined,
   };
 }

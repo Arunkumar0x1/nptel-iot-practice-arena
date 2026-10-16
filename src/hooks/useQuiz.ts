@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import type { Question, QuizConfig, UserAnswers, QuizResult } from '../types/quiz';
+import type { Question, QuizConfig, UserAnswers, QuizResult, FlaggedQuestions } from '../types/quiz';
 import { prepareQuizQuestions } from '../utils/shuffle';
 import { calculateQuizResult } from '../utils/scoring';
 import { saveQuizAttempt } from '../utils/storage';
@@ -17,6 +17,7 @@ export function useQuiz({ initialQuestions, config, onFinish }: UseQuizProps) {
 
   const [currentIndex, setCurrentIndex] = useState<number>(0);
   const [userAnswers, setUserAnswers] = useState<UserAnswers>({});
+  const [flaggedQuestions, setFlaggedQuestions] = useState<FlaggedQuestions>({});
   const [isSubmitted, setIsSubmitted] = useState<boolean>(false);
   const [showSubmitModal, setShowSubmitModal] = useState<boolean>(false);
 
@@ -28,6 +29,7 @@ export function useQuiz({ initialQuestions, config, onFinish }: UseQuizProps) {
   const currentQuestion: Question | undefined = questions[currentIndex];
 
   const answeredCount = Object.values(userAnswers).filter((ans) => ans && ans.length > 0).length;
+  const flaggedCount = Object.values(flaggedQuestions).filter(Boolean).length;
   const unansweredCount = questions.length - answeredCount;
 
   const submitTest = useCallback(() => {
@@ -75,6 +77,26 @@ export function useQuiz({ initialQuestions, config, onFinish }: UseQuizProps) {
       setCurrentIndex(index);
     }
   }, [questions.length]);
+
+  const goToNextUnanswered = useCallback(() => {
+    // Find next unanswered starting from current + 1, wrapping around
+    for (let offset = 1; offset < questions.length; offset++) {
+      const targetIdx = (currentIndex + offset) % questions.length;
+      const q = questions[targetIdx];
+      const ans = userAnswers[q.id];
+      if (!ans || ans.length === 0) {
+        setCurrentIndex(targetIdx);
+        return;
+      }
+    }
+  }, [currentIndex, questions, userAnswers]);
+
+  const toggleFlag = useCallback((questionId: string) => {
+    setFlaggedQuestions((prev) => ({
+      ...prev,
+      [questionId]: !prev[questionId],
+    }));
+  }, []);
 
   const selectOption = useCallback(
     (questionId: string, optionId: string, type: Question['type']) => {
@@ -124,29 +146,56 @@ export function useQuiz({ initialQuestions, config, onFinish }: UseQuizProps) {
         goToNext();
       } else if (e.key === 'ArrowLeft') {
         goToPrevious();
+      } else if (e.key === 'f' || e.key === 'F') {
+        if (currentQuestion) {
+          toggleFlag(currentQuestion.id);
+        }
+      } else if (e.key === 'c' || e.key === 'C') {
+        if (currentQuestion) {
+          clearAnswer(currentQuestion.id);
+        }
+      } else if (currentQuestion && !isSubmitted) {
+        // Support keys 1, 2, 3, 4 or a, b, c, d
+        const keyLower = e.key.toLowerCase();
+        let targetOptionId: string | null = null;
+        if (['a', 'b', 'c', 'd'].includes(keyLower)) {
+          targetOptionId = keyLower;
+        } else if (['1', '2', '3', '4'].includes(keyLower)) {
+          const idx = parseInt(keyLower, 10) - 1;
+          if (idx >= 0 && idx < currentQuestion.options.length) {
+            targetOptionId = currentQuestion.options[idx].id;
+          }
+        }
+        if (targetOptionId) {
+          selectOption(currentQuestion.id, targetOptionId, currentQuestion.type);
+        }
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [goToNext, goToPrevious, showSubmitModal]);
+  }, [goToNext, goToPrevious, toggleFlag, clearAnswer, selectOption, currentQuestion, isSubmitted, showSubmitModal]);
 
   return {
     questions,
     currentIndex,
     currentQuestion,
     userAnswers,
+    flaggedQuestions,
     isSubmitted,
     showSubmitModal,
     setShowSubmitModal,
     remainingSeconds,
     answeredCount,
+    flaggedCount,
     unansweredCount,
     selectOption,
     clearAnswer,
+    toggleFlag,
     goToNext,
     goToPrevious,
     goToIndex,
+    goToNextUnanswered,
     submitTest,
   };
 }

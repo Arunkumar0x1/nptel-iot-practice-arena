@@ -228,12 +228,16 @@ describe('Practice History & Statistics Derivation', () => {
     expect(weekStats[1].attemptsCount).toBe(2);
     expect(weekStats[1].bestScore).toBe(14);
     expect(weekStats[1].bestPercentage).toBe(93.3);
+    expect(weekStats[1].status).toBe('completed');
     expect(weekStats[2].attemptsCount).toBe(0);
     expect(weekStats[2].bestScore).toBeUndefined();
+    expect(weekStats[2].status).toBe('not_started');
 
     const overall = calculateOverallStats(mockHistory);
     expect(overall.totalAttempts).toBe(2);
     expect(overall.totalCorrect).toBe(26);
     expect(overall.totalIncorrect).toBe(4);
+    expect(overall.masteredWeeksCount).toBe(1);
+    expect(overall.overallReadinessPercentage).toBe(8); // 14 / 180 = ~7.78% -> 8%
   });
 });

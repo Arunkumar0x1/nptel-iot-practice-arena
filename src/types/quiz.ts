@@ -28,6 +28,7 @@ export interface QuizConfig {
 }
 
 export type UserAnswers = Record<string, string[]>; // questionId -> selected option ids
+export type FlaggedQuestions = Record<string, boolean>; // questionId -> isFlagged
 
 export interface QuizResult {
   id: string;
@@ -48,13 +49,18 @@ export interface QuizResult {
   questionIds: string[]; // order of questions in this attempt
 }
 
+export type WeekStatus = 'not_started' | 'in_progress' | 'completed';
+
 export interface WeekStats {
   week: number;
   totalQuestions: number;
   attemptsCount: number;
   bestScore?: number;
   bestPercentage?: number;
+  latestScore?: number;
+  latestPercentage?: number;
   lastAttemptDate?: string;
+  status: WeekStatus;
 }
 
 export interface OverallStats {
@@ -63,5 +69,7 @@ export interface OverallStats {
   totalCorrect: number;
   totalIncorrect: number;
   averageScorePercentage: number;
+  masteredWeeksCount: number; // weeks with bestScore >= 80%
+  overallReadinessPercentage: number; // curriculum mastery percentage
   bestCombinedScore?: { score: number; total: number; percentage: number };
 }
